@@ -1,5 +1,5 @@
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 
 
 class Booking:
@@ -13,11 +13,18 @@ class Booking:
 
         
         self.booking_date = datetime.now()
-        self.due_date = self.booking_date + timedelta(days=rental_days)
+        # Calendar-day policy: the due date is the end of the calendar day
+        # reached after rental_days date changes from the booking date.
+        due_day = self.booking_date.date() + timedelta(days=rental_days)
+        self.due_date = datetime.combine(due_day, time.max)
 
         self.actual_return_date = None
         self.status = "CONFIRMED"
-        self.final_amount = 0
+        # Snapshot the estimate at booking time so later vehicle-rate changes
+        # do not alter the customer's original estimate.
+        self.estimated_breakdown = vehicle.calculate_price_breakdown(rental_days)
+        self.estimated_amount = self.estimated_breakdown["total"]
+        self.final_amount = 0.0
 
     def display_booking(self):
 
@@ -26,8 +33,19 @@ class Booking:
         print("Customer:", self.customer.name)
         print("Vehicle:", self.vehicle.brand, self.vehicle.model)
         print("Rental Days:", self.rental_days)
-        print("Booking Date:", self.booking_date.strftime("%d-%m-%Y"))
+        print("Booking Date:", self.booking_date.strftime("%d-%m-%Y %H:%M"))
+        print("Due Date:", self.due_date.strftime("%d-%m-%Y"), "(end of day)")
+        print(f"Estimated Base Rent: ₹{self.estimated_breakdown['base_amount']:.2f}")
+        if self.estimated_breakdown["insurance"]:
+            print(f"Estimated Insurance (10%): ₹{self.estimated_breakdown['insurance']:.2f}")
+        if self.estimated_breakdown["helmet_charge"]:
+            print(f"Helmet Charge (one-time): ₹{self.estimated_breakdown['helmet_charge']:.2f}")
+        print(f"Estimated Booking Amount: ₹{self.estimated_amount:.2f}")
         print("Status:", self.status)
+        if self.actual_return_date is not None:
+            print("Actual Return Date:", self.actual_return_date.strftime("%d-%m-%Y %H:%M"))
+        if self.status == "RETURNED":
+            print(f"Final Amount: ₹{self.final_amount:.2f}")
 
 
 class BookingManagement:

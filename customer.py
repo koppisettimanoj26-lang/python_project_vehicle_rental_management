@@ -1,10 +1,19 @@
+from validation import (
+    validate_positive_id,
+    validate_non_empty_text,
+    validate_phone,
+    validate_email,
+)
+
+
 class Customer:
 
     def __init__(self, customer_id, name, phone, email):
-        self.customer_id = customer_id
-        self.name = name
-        self.phone = phone
-        self.email = email
+        # Shared constructor validation also protects records loaded from TXT.
+        self.customer_id = validate_positive_id(customer_id, "Customer ID")
+        self.name = validate_non_empty_text(name, "Customer name")
+        self.phone = validate_phone(phone)
+        self.email = validate_email(email)
 
     def display_details(self):
         print("\n----- CUSTOMER DETAILS -----")
@@ -19,23 +28,20 @@ class CustomerManagement:
         self.customers = []
 
     def register_customer(self, customer):
-        for existing_customer in self.customers:
+        try:
+            # Re-check at the management boundary in case an object was modified.
+            validate_positive_id(customer.customer_id, "Customer ID")
+            validate_non_empty_text(customer.name, "Customer name")
+            validate_phone(customer.phone)
+            validate_email(customer.email)
+        except ValueError as error:
+            print(error)
+            return
 
+        for existing_customer in self.customers:
             if existing_customer.customer_id == customer.customer_id:
                 print("Customer ID already exists!")
                 return
-
-        if not customer.name.strip():
-            print("Customer name cannot be empty!")
-            return
-
-        if not customer.phone.isdigit() or len(customer.phone) != 10:
-            print("Enter a valid 10-digit phone number!")
-            return
-
-        if "@" not in customer.email or "." not in customer.email:
-            print("Enter a valid email address!")
-            return
 
         self.customers.append(customer)
         print("Customer registered successfully!")

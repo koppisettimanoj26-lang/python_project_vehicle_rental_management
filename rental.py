@@ -8,23 +8,33 @@ class RentalManagement:
         self.bookings = bookings
 
     def calculate_rental_duration(self, booking, return_date):
+        """Calculate calendar rental days with a one-day minimum charge.
+
+        A return later on the booking date is valid and is charged as one day.
+        A return timestamp earlier than the booking timestamp is rejected.
+        """
+        if return_date < booking.booking_date:
+            raise ValueError("Return date cannot be before the booking date.")
 
         duration = (return_date.date() - booking.booking_date.date()).days
 
-        if duration < 1:
-            raise ValueError("Return date must be at least one day after booking.")
-
-        return duration
+        # A valid same-day rental is charged for at least one day.
+        return max(1, duration)
 
     def calculate_rental_price(self, booking, actual_days):
+        # Polymorphism: each vehicle type supplies its own itemized charges.
+        return booking.vehicle.calculate_price_breakdown(actual_days)
 
-        # Polymorphism: Car and Bike have different methods
-        return booking.vehicle.calculate_rent(actual_days)
+    def calculate_late_days(self, booking, return_date):
+        """Count calendar dates after the due date as late days.
+
+        The entire due calendar date is included. A return at any time on
+        that date is on time; each following calendar date adds one late day.
+        """
+        return max(0, (return_date.date() - booking.due_date.date()).days)
 
     def calculate_late_charges(self, booking, late_days):
-
         late_charge_per_day = booking.vehicle.rent_per_day * 1.5
-
         return late_charge_per_day * late_days
 
     def return_vehicle(self, booking_id, return_date=None):
@@ -40,14 +50,17 @@ class RentalManagement:
 
         if booking is None:
             print("Booking not found!")
-            return
+            return False
 
         if booking.status == "RETURNED":
             print("Vehicle has already been returned!")
-            return
+            return False
 
         if return_date is None:
             return_date = datetime.now()
+        elif not isinstance(return_date, datetime):
+            print("Invalid return date. Please provide a valid datetime value.")
+            return False
 
         # Calculate actual rental duration
         try:
@@ -57,23 +70,17 @@ class RentalManagement:
 
         except ValueError as error:
             print(error)
-            return
+            return False
 
-        # Calculate late days
-        late_days = max(
-            0,
-            (return_date.date() - booking.due_date.date()).days
-        )
+        # Calculate late days using the same calendar-date policy as duration.
+        late_days = self.calculate_late_days(booking, return_date)
 
         # Calculate rental amount
-        rental_amount = self.calculate_rental_price(
-            booking, actual_days
-        )
+        price_breakdown = self.calculate_rental_price(booking, actual_days)
+        rental_amount = price_breakdown["total"]
 
-        # Calculate late charges
-        late_charges = self.calculate_late_charges(
-            booking, late_days
-        )
+        # Calculate late charges separately from the rental/vehicle add-ons.
+        late_charges = self.calculate_late_charges(booking, late_days)
 
         # Final amount
         final_amount = rental_amount + late_charges
@@ -91,9 +98,28 @@ class RentalManagement:
         print("Booking ID:", booking.booking_id)
         print("Customer:", booking.customer.name)
         print("Vehicle:", booking.vehicle.model)
+        print("Booking Date:", booking.booking_date.strftime("%d-%m-%Y %H:%M"))
+        print("Due Date:", booking.due_date.strftime("%d-%m-%Y"), "(end of day)")
+        print("Actual Return Date:", return_date.strftime("%d-%m-%Y %H:%M"))
         print("Actual Rental Days:", actual_days)
         print("Late Days:", late_days)
-        print("Rental Amount: ₹", rental_amount)
-        print("Late Charges: ₹", late_charges)
-        print("Final Amount: ₹", final_amount)
-        print("Vehicle returned successfully!")
+        print("\nPrice Breakdown:")
+        print(
+            f"  Base Rent ({actual_days} day(s) × "
+            f"₹{booking.vehicle.rent_per_day:.2f}): "
+            f"₹{price_breakdown['base_amount']:.2f}"
+        )
+        if price_breakdown["insurance"]:
+            print(f"  Insurance (10% of base rent): ₹{price_breakdown['insurance']:.2f}")
+        if price_breakdown["helmet_charge"]:
+            print(f"  Helmet Charge (one-time): ₹{price_breakdown['helmet_charge']:.2f}")
+        print(f"  Rental Subtotal: ₹{rental_amount:.2f}")
+        print(
+            f"  Late Charges ({late_days} day(s) × "
+            f"₹{booking.vehicle.rent_per_day * 1.5:.2f}): "
+            f"₹{late_charges:.2f}"
+        )
+        print(f"Final Amount: ₹{final_amount:.2f}")
+
+        # The caller must save the updated records before reporting success.
+        return True

@@ -1,0 +1,17 @@
+# Python bytecode and cache folders
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local application records (keep data/.gitkeep tracked)
+data/*.txt
